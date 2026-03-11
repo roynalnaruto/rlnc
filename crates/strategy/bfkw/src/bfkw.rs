@@ -69,8 +69,7 @@ where
     }
 
     fn deserialize_proof(buf: &mut &[u8]) -> Result<Self, String> {
-        let sigma =
-            C::G2::read_cfg(buf, &()).map_err(|e| format!("sigma: {e}"))?;
+        let sigma = C::G2::read_cfg(buf, &()).map_err(|e| format!("sigma: {e}"))?;
         Ok(Self::new(sigma))
     }
 

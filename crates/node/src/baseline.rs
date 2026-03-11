@@ -74,36 +74,30 @@ impl Protocol for BaselineProtocol {
         }
     }
 
-    fn ingest(
-        &mut self,
-        channel: Channel,
-        _block_num: u64,
-        data: &[u8],
-    ) -> Result<bool, String> {
+    fn ingest(&mut self, channel: Channel, _block_num: u64, data: &[u8]) -> Result<bool, String> {
         match channel {
             Channel::Announce => {
                 if data.len() < 8 {
                     return Err("announcement too short".into());
                 }
                 #[allow(clippy::cast_possible_truncation)]
-                let byte_len =
-                    u64::from_be_bytes(data[..8].try_into().unwrap()) as usize;
+                let byte_len = u64::from_be_bytes(data[..8].try_into().unwrap()) as usize;
                 self.byte_len = byte_len;
                 trace!(byte_len, "baseline announcement received");
                 Ok(true)
-            }
+            },
             Channel::Data => {
                 if self.block.is_some() {
                     trace!("duplicate block received, ignoring");
                     return Ok(false);
                 }
-                let block = Block::decode(data)
-                    .map_err(|e| format!("failed to decode block: {e}"))?;
+                let block =
+                    Block::decode(data).map_err(|e| format!("failed to decode block: {e}"))?;
                 trace!(bytes = data.len(), "full block received");
                 self.block_bytes = Some(data.to_vec());
                 self.block = Some(block);
                 Ok(true)
-            }
+            },
         }
     }
 
@@ -111,11 +105,7 @@ impl Protocol for BaselineProtocol {
         self.block.is_some()
     }
 
-    fn recode<R: Rng + CryptoRng>(
-        &self,
-        num_targets: usize,
-        _rng: &mut R,
-    ) -> Vec<Vec<u8>> {
+    fn recode<R: Rng + CryptoRng>(&self, num_targets: usize, _rng: &mut R) -> Vec<Vec<u8>> {
         let bytes = self
             .block_bytes
             .as_ref()
@@ -171,11 +161,7 @@ mod tests {
 
         // Receiver side.
         let mut receiver = BaselineProtocol::new();
-        let result = receiver.ingest(
-            Channel::Announce,
-            0,
-            &proposal.announcement,
-        );
+        let result = receiver.ingest(Channel::Announce, 0, &proposal.announcement);
         assert!(result.unwrap());
 
         let result = receiver.ingest(Channel::Data, 0, &proposal.packets[0]);
@@ -221,12 +207,16 @@ mod tests {
         receiver
             .ingest(Channel::Announce, 0, &proposal.announcement)
             .unwrap();
-        assert!(receiver
-            .ingest(Channel::Data, 0, &proposal.packets[0])
-            .unwrap());
+        assert!(
+            receiver
+                .ingest(Channel::Data, 0, &proposal.packets[0])
+                .unwrap()
+        );
         // Second time should return false.
-        assert!(!receiver
-            .ingest(Channel::Data, 0, &proposal.packets[0])
-            .unwrap());
+        assert!(
+            !receiver
+                .ingest(Channel::Data, 0, &proposal.packets[0])
+                .unwrap()
+        );
     }
 }

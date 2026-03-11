@@ -57,7 +57,7 @@ serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
 uuid = { version = "1", features = ["v4"] }
 hex = "0.4"
-prometheus-client = "0.23"
+prometheus-client = "0.24"
 
 [workspace.lints.clippy]
 # Nursery and pedantic groups — opinionated but widely adopted.

@@ -17,5 +17,6 @@ pub mod actor;
 pub mod baseline;
 pub mod bfkw;
 pub mod config;
+pub mod metrics;
 pub mod pedersen;
 pub mod protocol;

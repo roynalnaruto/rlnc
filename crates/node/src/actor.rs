@@ -4,14 +4,16 @@
 //! The actor owns the protocol instance and manages multi-block
 //! sequencing with a state machine and per-block buffering.
 
-use bytes::Buf;
+use crate::metrics::Metrics;
 use crate::protocol::{Channel, Protocol};
+use bytes::Buf;
 use commonware_cryptography::PublicKey;
 use commonware_p2p::{Receiver, Recipients, Sender};
 use commonware_runtime::Clock;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use std::collections::BTreeMap;
+use std::time::Instant;
 use tracing::{debug, info, trace, warn};
 
 use p2p_primitives_types::Block;
@@ -62,6 +64,7 @@ where
     peers: Vec<K>,
     mesh_degree: usize,
     rng: ChaCha20Rng,
+    metrics: Metrics,
 
     // Multi-block state.
     state: ActorState,
@@ -69,6 +72,8 @@ where
     buffer: BTreeMap<u64, Vec<(Channel, Vec<u8>)>>,
     /// Whether we've forwarded for the current block (for OneShot).
     forwarded: bool,
+    /// Timestamp when decoding started for the current block.
+    decode_start: Option<Instant>,
 }
 
 impl<P, S, R, K> NodeActor<P, S, R, K>
@@ -89,6 +94,7 @@ where
         peers: Vec<K>,
         mesh_degree: usize,
         seed: u64,
+        metrics: Metrics,
     ) -> Self {
         Self {
             protocol,
@@ -99,9 +105,11 @@ where
             peers,
             mesh_degree,
             rng: ChaCha20Rng::seed_from_u64(seed),
+            metrics,
             state: ActorState::Init(0),
             buffer: BTreeMap::new(),
             forwarded: false,
+            decode_start: None,
         }
     }
 
@@ -121,6 +129,30 @@ where
         );
         context.sleep(startup_delay).await;
 
+        // Probe until at least one peer is reachable.
+        // A zero-length message is harmless — receivers discard
+        // anything shorter than 8 bytes.
+        let mut probe_attempts = 0u32;
+        loop {
+            let result = self
+                .announce_sender
+                .send(Recipients::All, Vec::<u8>::new(), false)
+                .await;
+            let connected = result.as_ref().map_or(0, Vec::len);
+            if connected > 0 {
+                info!(connected, "peers reachable, starting proposer");
+                break;
+            }
+            probe_attempts += 1;
+            if probe_attempts % 10 == 0 {
+                warn!(
+                    attempts = probe_attempts,
+                    "no peers reachable yet, still waiting"
+                );
+            }
+            context.sleep(std::time::Duration::from_secs(1)).await;
+        }
+
         for block_num in 0..num_blocks {
             if block_num > 0 {
                 context.sleep(block_interval).await;
@@ -136,11 +168,14 @@ where
                 "proposing block"
             );
 
-            let proposal = self.protocol.propose(
-                &block,
-                self.mesh_degree,
-                &mut self.rng,
-            );
+            let proposal = self
+                .protocol
+                .propose(&block, self.mesh_degree, &mut self.rng);
+
+            self.metrics.blocks_proposed.inc();
+            self.metrics
+                .current_block
+                .set(i64::try_from(block_num).unwrap_or(i64::MAX));
 
             // State = Decoding (proposer already has full rank).
             self.state = ActorState::Decoding(block_num);
@@ -148,10 +183,21 @@ where
             // Send announcement to all peers.
             let mut ann_msg = block_num.to_be_bytes().to_vec();
             ann_msg.extend_from_slice(&proposal.announcement);
-            let _ = self
+            let ann_msg_len = ann_msg.len() as u64;
+            let ann_result = self
                 .announce_sender
                 .send(Recipients::All, ann_msg, true)
                 .await;
+            let ann_count = ann_result.as_ref().map_or(0, Vec::len);
+            if ann_count == 0 {
+                warn!(block_num, "announcement sent to 0 peers");
+            } else {
+                self.metrics
+                    .bytes_uploaded
+                    .inc_by(ann_msg_len * ann_count as u64);
+                self.metrics.announcements_sent.inc_by(ann_count as u64);
+                debug!(block_num, peers = ann_count, "announcement sent");
+            }
 
             // Send data packets to mesh_degree random peers.
             let targets = self.select_peers(None);
@@ -159,10 +205,17 @@ where
                 if i < targets.len() {
                     let mut msg = block_num.to_be_bytes().to_vec();
                     msg.extend_from_slice(pkt);
-                    let _ = self
+                    let msg_len = msg.len() as u64;
+                    let send_result = self
                         .data_sender
                         .send(Recipients::One(targets[i].clone()), msg, false)
                         .await;
+                    if send_result.as_ref().map_or(true, Vec::is_empty) {
+                        warn!(block_num, target_idx = i, "data packet not delivered");
+                    } else {
+                        self.metrics.bytes_uploaded.inc_by(msg_len);
+                        self.metrics.packets_sent.inc();
+                    }
                 }
             }
 
@@ -192,6 +245,10 @@ where
                     match result {
                         Ok((sender, msg)) => {
                             let msg_bytes: &[u8] = msg.chunk();
+                            self.metrics
+                                .bytes_downloaded
+                                .inc_by(msg_bytes.len() as u64);
+                            self.metrics.announcements_received.inc();
                             if msg_bytes.len() < 8 {
                                 warn!("announcement too short");
                                 continue;
@@ -219,6 +276,10 @@ where
                     match result {
                         Ok((sender, msg)) => {
                             let msg_bytes: &[u8] = msg.chunk();
+                            self.metrics
+                                .bytes_downloaded
+                                .inc_by(msg_bytes.len() as u64);
+                            self.metrics.packets_received.inc();
                             if msg_bytes.len() < 8 {
                                 warn!("data packet too short");
                                 continue;
@@ -295,121 +356,128 @@ where
             match self.state {
                 ActorState::Init(n) => match ch {
                     Channel::Announce => {
-                        let result = self
-                            .protocol
-                            .ingest(Channel::Announce, n, &data);
+                        let result = self.protocol.ingest(Channel::Announce, n, &data);
                         match result {
                             Ok(true) => {
                                 self.state = ActorState::Decoding(n);
-                                debug!(
-                                    block_num = n,
-                                    "announcement received, decoding"
-                                );
+                                self.decode_start = Some(Instant::now());
+                                self.metrics
+                                    .current_block
+                                    .set(i64::try_from(n).unwrap_or(i64::MAX));
+                                debug!(block_num = n, "announcement received, decoding");
 
                                 // Re-broadcast announcement.
                                 let mut msg = n.to_be_bytes().to_vec();
                                 msg.extend_from_slice(&data);
-                                let _ = self
-                                    .announce_sender
-                                    .send(Recipients::All, msg, true)
-                                    .await;
+                                let msg_len = msg.len() as u64;
+                                let rebroadcast =
+                                    self.announce_sender.send(Recipients::All, msg, true).await;
+                                let rb_count = rebroadcast.as_ref().map_or(0, Vec::len);
+                                if rb_count == 0 {
+                                    warn!(
+                                        block_num = n,
+                                        "announcement re-broadcast reached 0 peers"
+                                    );
+                                } else {
+                                    self.metrics
+                                        .bytes_uploaded
+                                        .inc_by(msg_len * rb_count as u64);
+                                    self.metrics.announcements_sent.inc_by(rb_count as u64);
+                                    debug!(
+                                        block_num = n,
+                                        peers = rb_count,
+                                        "announcement re-broadcast sent"
+                                    );
+                                }
 
                                 // Drain buffered data for this block
                                 // into the work queue.
-                                if let Some(msgs) = self.buffer.remove(&n)
-                                {
+                                if let Some(msgs) = self.buffer.remove(&n) {
                                     for (bch, pkt) in msgs {
                                         if bch == Channel::Data {
-                                            work.push_back((
-                                                Channel::Data,
-                                                n,
-                                                pkt,
-                                            ));
+                                            work.push_back((Channel::Data, n, pkt));
                                         }
                                     }
                                 }
-                            }
-                            Ok(false) => {}
+                            },
+                            Ok(false) => {},
                             Err(e) => {
                                 warn!(
                                     block_num = n,
                                     error = %e,
                                     "announcement failed"
                                 );
-                            }
+                            },
                         }
-                    }
+                    },
                     Channel::Data => {
                         // Buffer data until announcement arrives.
                         self.buffer
                             .entry(n)
                             .or_default()
                             .push((Channel::Data, data));
-                    }
+                    },
                 },
                 ActorState::Decoding(n) => match ch {
                     Channel::Announce => {
                         // Already processing this block, ignore.
-                    }
+                    },
                     Channel::Data => {
-                        let result = self
-                            .protocol
-                            .ingest(Channel::Data, n, &data);
+                        let result = self.protocol.ingest(Channel::Data, n, &data);
                         match result {
                             Ok(true) => {
-                                let should_forward = match self
-                                    .protocol
-                                    .forward_condition()
-                                {
+                                self.metrics.packets_useful.inc();
+                                let should_forward = match self.protocol.forward_condition() {
                                     ForwardCondition::AfterDecode => {
-                                        self.protocol.is_complete()
-                                            && !self.forwarded
-                                    }
-                                    ForwardCondition::UntilDecode => {
-                                        !self.protocol.is_complete()
-                                    }
-                                    ForwardCondition::OneShot => {
-                                        !self.forwarded
-                                    }
+                                        self.protocol.is_complete() && !self.forwarded
+                                    },
+                                    ForwardCondition::UntilDecode => !self.protocol.is_complete(),
+                                    ForwardCondition::OneShot => !self.forwarded,
                                 };
 
                                 if should_forward {
                                     self.forwarded = true;
-                                    let packets = self.protocol.recode(
-                                        self.mesh_degree,
-                                        &mut self.rng,
-                                    );
-                                    let targets = self
-                                        .select_peers(current_sender);
-                                    for (i, pkt) in
-                                        packets.iter().enumerate()
-                                    {
+                                    let packets =
+                                        self.protocol.recode(self.mesh_degree, &mut self.rng);
+                                    let targets = self.select_peers(current_sender);
+                                    for (i, pkt) in packets.iter().enumerate() {
                                         if i < targets.len() {
-                                            let mut msg =
-                                                n.to_be_bytes().to_vec();
+                                            let mut msg = n.to_be_bytes().to_vec();
                                             msg.extend_from_slice(pkt);
-                                            let _ = self
+                                            let msg_len = msg.len() as u64;
+                                            let fwd_result = self
                                                 .data_sender
                                                 .send(
-                                                    Recipients::One(
-                                                        targets[i]
-                                                            .clone(),
-                                                    ),
+                                                    Recipients::One(targets[i].clone()),
                                                     msg,
                                                     false,
                                                 )
                                                 .await;
+                                            if fwd_result.as_ref().map_or(true, Vec::is_empty) {
+                                                warn!(
+                                                    block_num = n,
+                                                    target_idx = i,
+                                                    "forward packet not delivered"
+                                                );
+                                            } else {
+                                                self.metrics.bytes_uploaded.inc_by(msg_len);
+                                                self.metrics.packets_sent.inc();
+                                            }
                                         }
                                     }
                                 }
 
                                 if self.protocol.is_complete() {
-                                    let _block =
-                                        self.protocol.decode();
+                                    let _block = self.protocol.decode();
+                                    self.metrics.blocks_decoded.inc();
+                                    if let Some(start) = self.decode_start.take() {
+                                        self.metrics
+                                            .decode_duration_seconds
+                                            .observe(start.elapsed().as_secs_f64());
+                                    }
                                     info!(
                                         block_num = n,
-                                        strategy =
-                                            self.protocol.name(),
+                                        strategy = self.protocol.name(),
                                         "block decoded"
                                     );
                                     *decoded_count += 1;
@@ -418,57 +486,44 @@ where
                                     let next = n + 1;
                                     self.protocol.reset();
                                     self.forwarded = false;
-                                    self.state =
-                                        ActorState::Init(next);
+                                    self.decode_start = None;
+                                    self.state = ActorState::Init(next);
 
                                     // Drain buffered messages for
                                     // the next block into work
                                     // queue (announcements first).
-                                    if let Some(msgs) =
-                                        self.buffer.remove(&next)
-                                    {
-                                        let mut data_msgs =
-                                            Vec::new();
+                                    if let Some(msgs) = self.buffer.remove(&next) {
+                                        let mut data_msgs = Vec::new();
                                         for (bch, pkt) in msgs {
                                             match bch {
                                                 Channel::Announce => {
-                                                    work.push_back((
-                                                        Channel::Announce,
-                                                        next,
-                                                        pkt,
-                                                    ));
-                                                }
+                                                    work.push_back((Channel::Announce, next, pkt));
+                                                },
                                                 Channel::Data => {
-                                                    data_msgs
-                                                        .push(pkt);
-                                                }
+                                                    data_msgs.push(pkt);
+                                                },
                                             }
                                         }
                                         for pkt in data_msgs {
-                                            work.push_back((
-                                                Channel::Data,
-                                                next,
-                                                pkt,
-                                            ));
+                                            work.push_back((Channel::Data, next, pkt));
                                         }
                                     }
                                 }
-                            }
+                            },
                             Ok(false) => {
-                                trace!(
-                                    block_num = n,
-                                    "redundant packet"
-                                );
-                            }
+                                self.metrics.packets_redundant.inc();
+                                trace!(block_num = n, "redundant packet");
+                            },
                             Err(e) => {
+                                self.metrics.packets_failed.inc();
                                 warn!(
                                     block_num = n,
                                     error = %e,
                                     "verification failed"
                                 );
-                            }
+                            },
                         }
-                    }
+                    },
                 },
             }
         }
@@ -478,13 +533,7 @@ where
     fn select_peers(&mut self, exclude: Option<&K>) -> Vec<K> {
         use rand::seq::SliceRandom;
 
-        let mut candidates: Vec<&K> = self
-            .peers
-            .iter()
-            .filter(|p| {
-                exclude != Some(*p)
-            })
-            .collect();
+        let mut candidates: Vec<&K> = self.peers.iter().filter(|p| exclude != Some(*p)).collect();
 
         candidates.shuffle(&mut self.rng);
         candidates
@@ -496,11 +545,7 @@ where
 }
 
 /// Generate a random block of the given size.
-fn generate_random_block(
-    size_bytes: usize,
-    block_num: u64,
-    rng: &mut impl Rng,
-) -> Block {
+fn generate_random_block(size_bytes: usize, block_num: u64, rng: &mut impl Rng) -> Block {
     use alloy_primitives::B256;
 
     let transactions: Vec<u8> = (0..size_bytes).map(|_| rng.r#gen()).collect();

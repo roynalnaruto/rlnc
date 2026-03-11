@@ -70,23 +70,14 @@ pub trait Protocol: Send + 'static {
     /// # Errors
     ///
     /// Returns a descriptive error string on verification failure.
-    fn ingest(
-        &mut self,
-        channel: Channel,
-        block_num: u64,
-        data: &[u8],
-    ) -> Result<bool, String>;
+    fn ingest(&mut self, channel: Channel, block_num: u64, data: &[u8]) -> Result<bool, String>;
 
     /// Whether this node has enough data to decode the block.
     fn is_complete(&self) -> bool;
 
     /// Re-encode stored chunks and produce wire-ready forwarding
     /// packets.
-    fn recode<R: Rng + CryptoRng>(
-        &self,
-        num_targets: usize,
-        rng: &mut R,
-    ) -> Vec<Vec<u8>>;
+    fn recode<R: Rng + CryptoRng>(&self, num_targets: usize, rng: &mut R) -> Vec<Vec<u8>>;
 
     /// Decode the block from accumulated state.
     fn decode(&mut self) -> Block;

@@ -98,8 +98,7 @@ where
     }
 
     fn deserialize_proof(buf: &mut &[u8]) -> Result<Self, String> {
-        let n = u32::read_cfg(buf, &())
-            .map_err(|e| format!("commitment count: {e}"))? as usize;
+        let n = u32::read_cfg(buf, &()).map_err(|e| format!("commitment count: {e}"))? as usize;
         if n > 1024 {
             return Err("too many commitments".into());
         }
@@ -107,8 +106,7 @@ where
         for _ in 0..n {
             commitments.push(read_group::<G>(buf)?);
         }
-        let signature = S::Signature::read_cfg(buf, &())
-            .map_err(|e| format!("signature: {e}"))?;
+        let signature = S::Signature::read_cfg(buf, &()).map_err(|e| format!("signature: {e}"))?;
         Ok(Self::new(commitments, signature))
     }
 

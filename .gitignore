@@ -1,5 +1,7 @@
-target
+target/
 
-references
+references/
+
+docker/
 
 .env

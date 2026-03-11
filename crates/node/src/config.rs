@@ -22,15 +22,33 @@ pub const DEFAULT_DIRECTORY: &str = "./data/node";
 pub const DEFAULT_SEED: u64 = 42;
 
 // Serde default functions — thin wrappers over the constants above.
-const fn default_block_size() -> usize { DEFAULT_BLOCK_SIZE }
-const fn default_num_blocks() -> u64 { DEFAULT_NUM_BLOCKS }
-const fn default_block_interval() -> u64 { DEFAULT_BLOCK_INTERVAL }
-const fn default_startup_delay() -> u64 { DEFAULT_STARTUP_DELAY }
-const fn default_mesh_degree() -> usize { DEFAULT_MESH_DEGREE }
-fn default_log_level() -> String { DEFAULT_LOG_LEVEL.into() }
-const fn default_local() -> bool { DEFAULT_LOCAL }
-fn default_directory() -> String { DEFAULT_DIRECTORY.into() }
-const fn default_seed() -> u64 { DEFAULT_SEED }
+const fn default_block_size() -> usize {
+    DEFAULT_BLOCK_SIZE
+}
+const fn default_num_blocks() -> u64 {
+    DEFAULT_NUM_BLOCKS
+}
+const fn default_block_interval() -> u64 {
+    DEFAULT_BLOCK_INTERVAL
+}
+const fn default_startup_delay() -> u64 {
+    DEFAULT_STARTUP_DELAY
+}
+const fn default_mesh_degree() -> usize {
+    DEFAULT_MESH_DEGREE
+}
+fn default_log_level() -> String {
+    DEFAULT_LOG_LEVEL.into()
+}
+const fn default_local() -> bool {
+    DEFAULT_LOCAL
+}
+fn default_directory() -> String {
+    DEFAULT_DIRECTORY.into()
+}
+const fn default_seed() -> u64 {
+    DEFAULT_SEED
+}
 
 /// Per-node configuration, loaded from a YAML file.
 #[derive(Clone, Debug, Deserialize)]
@@ -81,6 +99,11 @@ pub struct NodeConfig {
     /// RNG seed.
     #[serde(default = "default_seed")]
     pub seed: u64,
+
+    /// Dialable address override (e.g. `"node-0:3000"` for Docker DNS).
+    /// When `None`, defaults to `127.0.0.1:{port}`.
+    #[serde(default)]
+    pub dialable_address: Option<String>,
 }
 
 /// Peer address entry in `peers.yaml`.
@@ -111,10 +134,9 @@ impl NodeConfig {
     ///
     /// Returns an error if the file cannot be read or parsed.
     pub fn load(path: &str) -> Result<Self, String> {
-        let contents = std::fs::read_to_string(path)
-            .map_err(|e| format!("failed to read config: {e}"))?;
-        serde_yaml::from_str(&contents)
-            .map_err(|e| format!("failed to parse config: {e}"))
+        let contents =
+            std::fs::read_to_string(path).map_err(|e| format!("failed to read config: {e}"))?;
+        serde_yaml::from_str(&contents).map_err(|e| format!("failed to parse config: {e}"))
     }
 }
 
@@ -124,10 +146,9 @@ impl NodeConfig {
 ///
 /// Returns an error if the file cannot be read or parsed.
 pub fn load_peers(path: &str) -> Result<Vec<PeerEntry>, String> {
-    let contents = std::fs::read_to_string(path)
-        .map_err(|e| format!("failed to read peers file: {e}"))?;
-    serde_yaml::from_str(&contents)
-        .map_err(|e| format!("failed to parse peers file: {e}"))
+    let contents =
+        std::fs::read_to_string(path).map_err(|e| format!("failed to read peers file: {e}"))?;
+    serde_yaml::from_str(&contents).map_err(|e| format!("failed to parse peers file: {e}"))
 }
 
 /// Compute chunk dimension $m$ from block size and $N$.
