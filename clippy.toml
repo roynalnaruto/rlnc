@@ -1,0 +1,33 @@
+# Clippy configuration for the rlnc workspace.
+# Applied automatically to all workspace members.
+# See: https://doc.rust-lang.org/clippy/configuration.html
+
+# Minimum Supported Rust Version — enables version-aware lints.
+msrv = "1.85"
+
+# Cognitive complexity threshold before clippy warns.
+cognitive-complexity-threshold = 30
+
+# Maximum number of lines in a function body before triggering too_many_lines.
+too-many-lines-threshold = 150
+
+# Maximum number of function arguments before triggering too_many_arguments.
+too-many-arguments-threshold = 8
+
+# Maximum number of struct fields for constructors (triggers too_many_fields lint).
+max-struct-bools = 3
+
+# Type complexity threshold.
+type-complexity-threshold = 250
+
+# Threshold for trivially_copy_pass_by_ref (bytes).
+trivial-copy-size-limit = 8
+
+# Maximum number of single-char binding names before triggering many_single_char_names.
+single-char-binding-names-threshold = 5
+
+# Maximum number of bool parameters.
+max-fn-params-bools = 3
+
+# Enforced doc comment style.
+doc-valid-idents = ["IPv4", "IPv6", "ELI5", "RLNC", "LHSS", "BLS12", "BN254"]

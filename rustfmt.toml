@@ -1,0 +1,35 @@
+# Rustfmt configuration for the rlnc workspace.
+# Applied automatically to all workspace members.
+# See: https://rust-lang.github.io/rustfmt
+
+# Match the crate edition for correct syntax parsing.
+edition = "2024"
+style_edition = "2024"
+
+# Line width and indentation.
+max_width = 100
+hard_tabs = false
+tab_spaces = 4
+
+# Use Unix line endings for consistency across platforms.
+newline_style = "Unix"
+
+# Heuristic-based formatting for small expressions.
+use_small_heuristics = "Default"
+
+# Ordering: keep imports and modules sorted alphabetically.
+reorder_imports = true
+reorder_modules = true
+
+# Modern Rust idioms.
+use_try_shorthand = true
+use_field_init_shorthand = true
+
+# Merge multiple #[derive(...)] attributes into one.
+merge_derives = true
+
+# Trailing comma after block-based match arms for consistency.
+match_block_trailing_comma = true
+
+# Always print the ABI for extern items (e.g., extern "C").
+force_explicit_abi = true

@@ -1,0 +1,89 @@
+[workspace]
+resolver = "3"
+members = [
+  "crates/strategy/core",
+  "crates/strategy/baseline",
+  "crates/strategy/pedersen",
+  "crates/strategy/bfkw",
+  "crates/primitives/math",
+  "crates/primitives/types",
+  "crates/sim",
+  "crates/node",
+  "crates/deploy",
+]
+
+[workspace.lints.rust]
+# Require documentation on all public items and modules.
+missing_docs = "warn"
+
+# Safety and correctness.
+unsafe_code = "deny"
+unused_must_use = "warn"
+unreachable_pub = "warn"
+
+[workspace.dependencies]
+# workspace
+p2p-primitives-math = { path = "crates/primitives/math" }
+p2p-primitives-types = { path = "crates/primitives/types" }
+p2p-strategy-core = { path = "crates/strategy/core" }
+p2p-baseline = { path = "crates/strategy/baseline" }
+p2p-pedersen = { path = "crates/strategy/pedersen" }
+p2p-bfkw = { path = "crates/strategy/bfkw" }
+p2p-node = { path = "crates/node" }
+
+# commonware
+commonware-codec = { git = "https://github.com/commonwarexyz/monorepo.git", branch = "main", default-features = false }
+commonware-cryptography = { git = "https://github.com/commonwarexyz/monorepo.git", branch = "main", default-features = false }
+commonware-macros = { git = "https://github.com/commonwarexyz/monorepo.git", branch = "main" }
+commonware-math = { git = "https://github.com/commonwarexyz/monorepo.git", branch = "main", default-features = false }
+commonware-p2p = { git = "https://github.com/commonwarexyz/monorepo.git", branch = "main", default-features = false }
+commonware-parallel = { git = "https://github.com/commonwarexyz/monorepo.git", branch = "main", default-features = false }
+commonware-runtime = { git = "https://github.com/commonwarexyz/monorepo.git", branch = "main", default-features = false }
+commonware-utils = { git = "https://github.com/commonwarexyz/monorepo.git", branch = "main", default-features = false }
+
+# alloy
+alloy-primitives = { version = "1.5.7", default-features = false, features = [
+  "tiny-keccak",
+] }
+bytes = { version = "1.7.1", default-features = false }
+rand = { version = "0.8", default-features = false }
+rand_chacha = { version = "0.3", default-features = false }
+tracing = { version = "0.1.41", default-features = false }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "ansi"] }
+dotenvy = "0.15"
+futures = "0.3"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+uuid = { version = "1", features = ["v4"] }
+hex = "0.4"
+prometheus-client = "0.23"
+
+[workspace.lints.clippy]
+# Nursery and pedantic groups — opinionated but widely adopted.
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+
+# Correctness (these are deny by default, keep them explicit).
+correctness = { level = "deny", priority = -1 }
+
+# Selectively allow common pedantic false positives.
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+# LaTeX notation in doc comments triggers false positives.
+doc_markdown = "allow"
+
+# Style and clarity.
+needless_pass_by_value = "warn"
+implicit_clone = "warn"
+cloned_instead_of_copied = "warn"
+redundant_closure_for_method_calls = "warn"
+manual_string_new = "warn"
+uninlined_format_args = "warn"
+
+# Performance.
+large_stack_arrays = "warn"
+large_types_passed_by_value = "warn"
+
+# Suspicious patterns.
+suspicious = { level = "warn", priority = -1 }
