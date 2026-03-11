@@ -1,0 +1,26 @@
+[package]
+name = "p2p-primitives-types"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+# workspace
+p2p-primitives-math.workspace = true
+
+# commonware
+commonware-codec.workspace = true
+commonware-cryptography.workspace = true
+commonware-math.workspace = true
+
+# alloy
+alloy-primitives.workspace = true
+
+# miscellaneous
+bytes.workspace = true
+rand.workspace = true
+
+[dev-dependencies]
+rand_chacha.workspace = true
