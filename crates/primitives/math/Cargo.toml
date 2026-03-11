@@ -1,0 +1,18 @@
+[package]
+name = "p2p-primitives-math"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+# commonware
+commonware-cryptography.workspace = true
+commonware-math.workspace = true
+
+# miscellaneous
+rand.workspace = true
+
+[dev-dependencies]
+rand_chacha.workspace = true
