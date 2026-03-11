@@ -1,0 +1,27 @@
+[package]
+name = "p2p-pedersen"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+# workspace
+p2p-strategy-core.workspace = true
+p2p-primitives-math.workspace = true
+p2p-primitives-types.workspace = true
+
+# commonware
+commonware-codec.workspace = true
+commonware-cryptography.workspace = true
+commonware-math.workspace = true
+commonware-parallel.workspace = true
+
+# miscellaneous
+rand.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+alloy-primitives.workspace = true
+rand_chacha.workspace = true
