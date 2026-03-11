@@ -1,0 +1,35 @@
+[package]
+name = "p2p-sim"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "compare"
+path = "src/bin/compare.rs"
+
+[dependencies]
+# workspace
+p2p-strategy-core.workspace = true
+p2p-baseline.workspace = true
+p2p-primitives-math.workspace = true
+p2p-primitives-types.workspace = true
+p2p-pedersen.workspace = true
+p2p-bfkw.workspace = true
+
+# commonware
+commonware-codec.workspace = true
+commonware-cryptography.workspace = true
+commonware-math.workspace = true
+
+# alloy
+alloy-primitives.workspace = true
+
+# miscellaneous
+rand.workspace = true
+rand_chacha.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+dotenvy.workspace = true
