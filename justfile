@@ -17,6 +17,26 @@ check:
 test:
     cargo test --workspace
 
+# Run the in-process discrete-event simulation (configure via .env).
+sim:
+    cargo run --release --bin compare
+
+# Local generation defaults — override on CLI: just local_nodes=10 local-gen
+local_nodes    := "5"
+local_strategy := "pedersen"
+local_output   := "/tmp/rlnc"
+
+# Generate local node configs.
+local-gen:
+    cargo run --release --bin deploy -- generate local \
+        --nodes {{local_nodes}} \
+        --strategy {{local_strategy}} \
+        --block-size {{block_size}} \
+        --mesh-degree {{mesh_degree}} \
+        --num-blocks {{num_blocks}} \
+        --seed {{seed}} \
+        --output {{local_output}}
+
 # Build Docker image for the node binary.
 docker-build:
     docker build -t rlnc-node:latest .

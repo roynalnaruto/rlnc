@@ -7,7 +7,6 @@ isolated peer-to-peer networks:
 
 | Crate            | Strategy                                  | Description                                                                 |
 |:-----------------|:------------------------------------------|:----------------------------------------------------------------------------|
-| `p2p-baseline`   | Gossipsub-style full-block forwarding      | Ethereum-derivative: every hop sends the entire block to every mesh peer.   |
 | `p2p-pedersen`   | RLNC + Pedersen Commitments                | Nodes send coded chunks verified with **Pedersen commitments** (N per pkt). |
 | `p2p-bfkw`       | RLNC + BFKW Signatures                    | Nodes send coded chunks verified with a **single BFKW signature** per pkt.  |
 
@@ -16,7 +15,7 @@ The measurable outputs are per-node and network-wide **bandwidth** and
 
 ## Key References
 
-- Presentation & math: `presentation-content.md` (this repo)
+- Presentation & math: `docs/book.md` (this repo)
 - RLNC proposal: <https://ethresear.ch/t/faster-block-blob-propagation-in-ethereum/21370>
 - LHSS proposal: <https://ethresear.ch/t/linearly-homomorphic-signatures-for-rlnc/24072>
 - BFKW paper: <https://eprint.iacr.org/2008/316>
@@ -31,13 +30,15 @@ crates/
 │   └── types/        # p2p-primitives-types — Block, Chunk, CodedChunk, BlockDecoder
 ├── strategy/
 │   ├── core/         # p2p-strategy-core    — Strategy trait, ForwardCondition, IntegrityScheme
-│   ├── baseline/     # p2p-baseline         — full-block gossipsub
+│   ├── baseline/     # p2p-baseline         — full-block transmission
 │   ├── pedersen/     # p2p-pedersen         — RLNC + Pedersen commitments
 │   └── bfkw/         # p2p-bfkw            — RLNC + BFKW linearly-homomorphic signatures
-└── sim/              # p2p-sim              — discrete-event simulation engine + compare binary
+├── sim/              # p2p-sim              — discrete-event simulation engine + compare binary
+├── node/             # p2p-node             — live p2p node binary (commonware-p2p networking)
+└── deploy/           # p2p-deploy           — config generation for local + Docker deployments
 ```
 
-Rust edition **2024**, MSRV **1.85**. Formatting: `rustfmt.toml` (100-char
+Rust edition **2024**, MSRV **1.93**. Formatting: `rustfmt.toml` (100-char
 lines). Linting: workspace `clippy.toml` with pedantic + nursery.
 
 ## Generic Parameters
@@ -69,6 +70,8 @@ over propagation strategies. Each strategy provides:
 
 - `type NodeState` — per-node mutable state (decoder, accumulated proofs)
 - `type Packet: Clone` — wire-level packet transmitted between peers
+- `name()` — human-readable strategy name
+- `forward_condition()` — returns when to forward (`ForwardCondition`)
 - `init_proposer(block, num_peers, rng)` — splits a block into packets
   and returns `(NodeState, Vec<Packet>, byte_len)`
 - `init_receiver()` — creates an empty receiver state
@@ -76,9 +79,9 @@ over propagation strategies. Each strategy provides:
   (rank increase), `Ok(false)` = redundant, `Err` = verification failure
 - `forward(state, num_peers, rng)` — re-encodes and produces packets
   for mesh neighbors
+- `packet_size(packet)` — wire size in bytes (for bandwidth accounting)
 - `can_decode(state)` / `decode(state, byte_len)` — check and perform
   block reconstruction
-- `forward_condition()` — returns when to forward (`ForwardCondition`)
 
 **`IntegrityScheme<F, N>`** (`strategy/core/src/proof.rs`) abstracts the
 cryptographic proof that travels with each coded chunk:
@@ -92,6 +95,15 @@ cryptographic proof that travels with each coded chunk:
 - `combine(proofs, alphas)` — derives a proof for a re-encoded chunk
   from existing proofs and the combining coefficients
 
+**`IntegrityProof`** (`strategy/core/src/proof.rs`) is a companion trait
+for wire serialization of proofs:
+
+- `serialize_proof(buf)` / `deserialize_proof(buf)` — binary encoding
+- `proof_wire_size()` — serialized size in bytes
+
+Implemented by each concrete proof type. Enables `SignedPacket` to
+provide unified serialization/deserialization.
+
 **`SignedPacket<F, N, S>`** (`strategy/core/src/proof.rs`) is the wire
 wrapper that bundles a `CodedChunk` with its `S::Proof`.
 
@@ -101,10 +113,14 @@ received coded chunks and their coefficient vectors:
 - `add(coded_chunk)` — feeds a coded chunk's coefficient vector `b` to
   an `IncrementalEchelon` which checks linear independence. Returns
   `true` if rank increased (chunk stored), `false` if redundant.
-- `reencode_with(alphas)` — produces a new coded chunk as a random
+- `rank()` / `is_complete()` — current rank and whether rank == N.
+- `reencode_with(alphas)` — produces a new coded chunk as a given
   linear combination of stored chunks (for forwarding).
+- `reencode(rng)` — convenience wrapper that samples random alphas
+  internally.
 - `decode()` — once `rank == N`, inverts the coefficient matrix and
   recovers the N original chunks.
+- `reset()` — clears state for the next block.
 
 **Helper functions** (`strategy/core/src/helpers.rs`) compose these
 traits into reusable receive/forward logic shared by both Pedersen and
@@ -300,6 +316,8 @@ sequenceDiagram
 | `commonware-cryptography`| BLS12-381 via `blst`: key types, signatures, hash-to-curve |
 | `commonware-math`        | Algebraic traits (Field, Ring, CryptoGroup, HashToGroup)    |
 | `commonware-parallel`    | Parallel MSM (Sequential backend)                          |
+| `commonware-runtime`     | Async runtime abstraction (used by `p2p-node`)              |
+| `commonware-p2p`         | P2P networking layer (used by `p2p-node`)                   |
 
 ### General dependencies
 
@@ -307,8 +325,14 @@ sequenceDiagram
 |:-------------------|:--------|:------------------------------------------|
 | `alloy-primitives` | 1.5.7   | B256 for block hashes                      |
 | `bytes`            | 1.7.1   | Byte buffer utilities                      |
+| `clap`             | 4       | CLI argument parsing (node, deploy)        |
+| `futures`          | 0.3     | Async combinators (node)                   |
+| `prometheus-client` | 0.23   | Metrics exposition (node)                  |
 | `rand`             | 0.8     | Randomness (matches commonware's pin)      |
 | `rand_chacha`      | 0.3     | Deterministic RNG for reproducible sims    |
+| `serde`            | 1       | Serialization for config files             |
+| `serde_yaml`       | 0.9     | YAML config parsing (node, deploy)         |
+| `tokio`            | 1       | Async runtime (matches commonware's pin)   |
 | `tracing`          | 0.1.41  | Structured logging (matches commonware)    |
 | `tracing-subscriber` | 0.3  | Log subscriber with env-filter + ANSI      |
 | `dotenvy`          | 0.15    | `.env` file loading for sim config         |
