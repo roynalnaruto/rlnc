@@ -12,8 +12,7 @@ use tracing::{debug, trace};
 /// Gossipsub full-block forwarding strategy.
 ///
 /// A unit struct — all network parameters (mesh degree, latency,
-/// bandwidth) live in the simulation layer's
-/// [`PropagationMechanism`](p2p_sim).
+/// bandwidth) live in the simulation layer's `PropagationMechanism`.
 pub struct BaselineStrategy;
 
 /// Node state: `None` until the block is received.

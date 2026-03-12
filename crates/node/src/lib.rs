@@ -1,7 +1,7 @@
 //! RLNC P2P node — protocol implementations and actor.
 //!
-//! This crate provides the [`Protocol`] trait and three concrete
-//! implementations for real P2P block propagation:
+//! This crate provides the [`Protocol`][protocol::Protocol] trait and three
+//! concrete implementations for real P2P block propagation:
 //!
 //! - [`BaselineProtocol`](baseline::BaselineProtocol) — full-block
 //!   gossipsub.
