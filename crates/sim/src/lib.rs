@@ -9,8 +9,7 @@
 //!
 //! - [`config`] -- environment-driven simulation parameters
 //! - [`topology`] -- random D-regular mesh generation
-//! - [`strategy`] -- [`PropagationMechanism`](strategy::PropagationMechanism)
-//!   wrapper
+//! - [`strategy`] -- [`PropagationMechanism`] wrapper
 //! - [`engine`] -- discrete-event simulation loop
 //! - [`metrics`] -- bandwidth and propagation metrics
 

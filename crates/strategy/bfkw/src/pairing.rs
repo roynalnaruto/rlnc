@@ -5,8 +5,10 @@
 //! `blst`-based BLS12-381 primitives.
 //!
 //! Only the LHSS (BFKW) strategy requires pairings. The Pedersen scheme
-//! uses only [`HashToGroup`] / [`CryptoGroup`] — no pairing. This trait
-//! exists so that both strategy crates can be generic over the curve.
+//! uses only [`HashToGroup`] and [`commonware_math::algebra::CryptoGroup`]
+//! — no pairing.
+//!
+//! This trait exists so that both strategies can be generic over the curve.
 
 use commonware_math::algebra::{Field, HashToGroup, Random};
 

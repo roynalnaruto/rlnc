@@ -17,6 +17,11 @@ check:
 test:
     cargo test --workspace
 
+# Build docs and run doc-tests (warnings are errors).
+docs:
+    RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --document-private-items --no-deps
+    cargo test --workspace --doc
+
 # Run the in-process discrete-event simulation (configure via .env).
 sim:
     cargo run --release --bin compare
