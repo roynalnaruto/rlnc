@@ -101,6 +101,7 @@ just lint-fix   # Format the workspace (nightly rustfmt)
 just lint       # Check formatting + clippy lints
 just check      # Type-check the entire workspace
 just test       # Run all workspace tests
+just docs       # Build docs (warnings-as-errors) + run doc-tests
 ```
 
 ## Credits & Acknowledgements
