@@ -164,6 +164,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use commonware_cryptography::bls12381::primitives::group::{G1, G2};
+    use commonware_math::algebra::CryptoGroup;
     use p2p_primitives_math::{Additive, Scalar};
 
     use super::*;
@@ -233,5 +235,117 @@ mod tests {
         assert_eq!(elems.len(), expected_count);
         let recovered = field_elements_to_bytes(&elems);
         assert_eq!(&recovered[..data.len()], &data[..]);
+    }
+
+    #[test]
+    fn read_field_zero_scalar() {
+        let zero = Scalar::zero();
+        let mut buf = Vec::new();
+        <Scalar as CodecWrite>::write(&zero, &mut buf);
+        let mut cursor: &[u8] = &buf;
+        let result: Scalar = read_field(&mut cursor).unwrap();
+        assert_eq!(result, Scalar::zero());
+        assert!(cursor.is_empty());
+    }
+
+    #[test]
+    fn read_field_nonzero_scalar() {
+        let val = Scalar::from_u64(42);
+        let mut buf = Vec::new();
+        <Scalar as CodecWrite>::write(&val, &mut buf);
+        let mut cursor: &[u8] = &buf;
+        let result: Scalar = read_field(&mut cursor).unwrap();
+        assert_eq!(result, val);
+        assert!(cursor.is_empty());
+    }
+
+    #[test]
+    fn read_field_buffer_too_short() {
+        let short = [0u8; 16];
+        let mut cursor: &[u8] = &short;
+        let result: Result<Scalar, _> = read_field(&mut cursor);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn read_field_multiple_scalars() {
+        let a = Scalar::from_u64(7);
+        let b = Scalar::zero();
+        let mut buf = Vec::new();
+        <Scalar as CodecWrite>::write(&a, &mut buf);
+        <Scalar as CodecWrite>::write(&b, &mut buf);
+        let mut cursor: &[u8] = &buf;
+        let ra: Scalar = read_field(&mut cursor).unwrap();
+        let rb: Scalar = read_field(&mut cursor).unwrap();
+        assert_eq!(ra, a);
+        assert_eq!(rb, b);
+        assert!(cursor.is_empty());
+    }
+
+    #[test]
+    fn read_group_identity_g1() {
+        let id = G1::zero();
+        let mut buf = Vec::new();
+        <G1 as CodecWrite>::write(&id, &mut buf);
+        let mut cursor: &[u8] = &buf;
+        let result: G1 = read_group(&mut cursor).unwrap();
+        assert_eq!(result, G1::zero());
+        assert!(cursor.is_empty());
+    }
+
+    #[test]
+    fn read_group_nonzero_g1() {
+        let g = G1::generator();
+        let mut buf = Vec::new();
+        <G1 as CodecWrite>::write(&g, &mut buf);
+        let mut cursor: &[u8] = &buf;
+        let result: G1 = read_group(&mut cursor).unwrap();
+        assert_eq!(result, g);
+        assert!(cursor.is_empty());
+    }
+
+    #[test]
+    fn read_group_identity_g2() {
+        let id = G2::zero();
+        let mut buf = Vec::new();
+        <G2 as CodecWrite>::write(&id, &mut buf);
+        let mut cursor: &[u8] = &buf;
+        let result: G2 = read_group(&mut cursor).unwrap();
+        assert_eq!(result, G2::zero());
+        assert!(cursor.is_empty());
+    }
+
+    #[test]
+    fn read_group_nonzero_g2() {
+        let g = G2::generator();
+        let mut buf = Vec::new();
+        <G2 as CodecWrite>::write(&g, &mut buf);
+        let mut cursor: &[u8] = &buf;
+        let result: G2 = read_group(&mut cursor).unwrap();
+        assert_eq!(result, g);
+        assert!(cursor.is_empty());
+    }
+
+    #[test]
+    fn read_group_buffer_too_short() {
+        let short = [0u8; 16];
+        let mut cursor: &[u8] = &short;
+        let result: Result<G1, _> = read_group(&mut cursor);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn read_group_multiple_g1() {
+        let a = G1::generator();
+        let b = G1::zero();
+        let mut buf = Vec::new();
+        <G1 as CodecWrite>::write(&a, &mut buf);
+        <G1 as CodecWrite>::write(&b, &mut buf);
+        let mut cursor: &[u8] = &buf;
+        let ra: G1 = read_group(&mut cursor).unwrap();
+        let rb: G1 = read_group(&mut cursor).unwrap();
+        assert_eq!(ra, a);
+        assert_eq!(rb, b);
+        assert!(cursor.is_empty());
     }
 }
