@@ -3,8 +3,8 @@
 A proof-of-concept comparing bandwidth and compute costs of three
 block-propagation strategies in peer-to-peer networks.
 
-> **Warning:** This is a personal research PoC — not production software.
-> APIs, wire formats, and simulation parameters will change without notice.
+> [!WARNING]
+> This is a personal research PoC — DO NOT use in production.
 
 ## Overview
 
